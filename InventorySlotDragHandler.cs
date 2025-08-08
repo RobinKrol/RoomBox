@@ -1284,6 +1284,14 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
         previewInstance = Instantiate(dragPrefab);
         SetLayerRecursively(previewInstance, outlineLayer);
         
+        // Сохраняем оригинальный слой префаба для превью объекта
+        int originalLayer = dragPrefab.layer;
+        if (originalLayer != outlineLayer)
+        {
+            SetLayerRecursively(previewInstance, originalLayer);
+            Debug.Log($"✅ Сохранен оригинальный слой {LayerMask.LayerToName(originalLayer)} для превью объекта: {previewInstance.name}");
+        }
+        
         // Настраиваем коллайдеры превью объекта
         SetupPreviewColliders(previewInstance);
         
@@ -1721,6 +1729,11 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
             Debug.Log("Instantiate выполнен!");
             Debug.Log($"Instantiate: {placedObject.name} at {placedObject.transform.position}");
             Debug.Log("Предмет успешно размещен на полу.");
+            
+            // Сохраняем оригинальный слой префаба для размещенного объекта
+            int originalLayer = itemToPlace.prefab.layer;
+            SetLayerRecursively(placedObject, originalLayer);
+            Debug.Log($"✅ Сохранен оригинальный слой {LayerMask.LayerToName(originalLayer)} для размещенного объекта: {placedObject.name}");
                     
             // Настраиваем коллайдеры размещенного объекта
             SetupPlacedObjectColliders(placedObject);
@@ -1950,13 +1963,11 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
             }
         }
         
-        // Устанавливаем правильный слой для размещенного объекта
-        // Размещенные объекты должны быть на слое Default, а не OutlinePreview
-        SetLayerRecursively(placedObject, LayerMask.NameToLayer("Default"));
-        
+        // Сохраняем оригинальный слой объекта (не изменяем его)
+        string currentLayer = LayerMask.LayerToName(placedObject.layer);
         if (inventoryManager != null && inventoryManager.DebugCollisions)
         {
-            Debug.Log($"[SetupPlacedObjectColliders] Объект {placedObject.name} установлен на слой Default");
+            Debug.Log($"[SetupPlacedObjectColliders] Объект {placedObject.name} остается на слое {currentLayer}");
         }
     }
 

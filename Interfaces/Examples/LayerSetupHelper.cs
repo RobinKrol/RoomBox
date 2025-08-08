@@ -48,18 +48,18 @@ namespace InventorySystem.Examples
             // Создаем новую конфигурацию
             var config = new PlacementValidationConfig();
             
-            // Настраиваем маску коллизий - проверяем только мебель и окружение
-            int staticEnvLayer = LayerMask.NameToLayer(staticEnvironmentLayer);
+            // Настраиваем маску коллизий - проверяем только мебель (предметы, которые могут пересекаться)
             int furnitureLayerIndex = LayerMask.NameToLayer(furnitureLayer);
             
-            if (staticEnvLayer == -1 || furnitureLayerIndex == -1)
+            if (furnitureLayerIndex == -1)
             {
-                Debug.LogError($"Слои {staticEnvironmentLayer} или {furnitureLayer} не найдены!");
+                Debug.LogError($"Слой {furnitureLayer} не найден!");
                 Debug.LogError("Создайте слои вручную в Unity: Edit → Project Settings → Tags and Layers");
                 return;
             }
             
-            LayerMask collisionMask = (1 << staticEnvLayer) | (1 << furnitureLayerIndex);
+            // Проверяем только слой Furniture для предотвращения пересечений
+            LayerMask collisionMask = (1 << furnitureLayerIndex);
             currentCollisionMask = collisionMask;
             
             // Настраиваем маску поверхностей - проверяем только поверхности
@@ -97,10 +97,11 @@ namespace InventorySystem.Examples
             configField?.SetValue(validator, config);
             
             Debug.Log("✅ Маски коллизий настроены!");
-            Debug.Log($"  CollisionCheckMask: {collisionMask} (слои: {staticEnvironmentLayer}, {furnitureLayer})");
+            Debug.Log($"  CollisionCheckMask: {collisionMask} (слой: {furnitureLayer})");
             Debug.Log($"  SurfaceCheckMask: {surfaceMask} (слой: {surfaceLayer})");
             Debug.Log($"  PreventObjectOverlap: true");
             Debug.Log($"  UseStrictValidation: true");
+            Debug.Log("📝 Логика: Проверяем пересечения только между объектами на слое Furniture");
         }
         
         [ContextMenu("Проверить текущие настройки")]

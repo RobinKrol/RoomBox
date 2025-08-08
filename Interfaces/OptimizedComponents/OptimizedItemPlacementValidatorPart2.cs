@@ -270,13 +270,25 @@ namespace InventorySystem.OptimizedComponents
                 return true;
             }
             
-            // Если объект на слое Surface - исключаем из коллизий (но не из проверки поверхностей)
-            if (layerName == "Surface")
+            // Если объект на слое StaticEnvironment - исключаем из коллизий (это пол/стены)
+            if (layerName == "StaticEnvironment")
             {
-                LogDebug($"Исключаем поверхность из коллизий: {col.name}");
+                LogDebug($"Исключаем статичное окружение из коллизий: {col.name}");
                 ignoredCollidersCache[col] = true;
                 return true;
             }
+            
+            // Если объект НЕ на слоях Furniture или Surface - исключаем из коллизий
+            // Проверяем наложения только между предметами Furniture и Surface
+            if (layerName != "Furniture" && layerName != "Surface")
+            {
+                LogDebug($"Исключаем объект не на слоях Furniture/Surface: {col.name} (слой: {layerName})");
+                ignoredCollidersCache[col] = true;
+                return true;
+            }
+            
+            // Если дошли сюда - это объект на слоях Furniture или Surface, проверяем наложение
+            LogDebug($"Проверяем наложение с объектом на слое {layerName}: {col.name}");
             
             LogDebug($"Коллизия с объектом: {col.name} (слой: {layerName})");
             ignoredCollidersCache[col] = false;
