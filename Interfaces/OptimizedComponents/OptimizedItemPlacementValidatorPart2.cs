@@ -228,6 +228,7 @@ namespace InventorySystem.OptimizedComponents
             if (previewInstance != null && (col.gameObject == previewInstance || 
                 col.transform.IsChildOf(previewInstance.transform)))
             {
+                LogDebug($"Исключаем превью объект: {col.name}");
                 ignoredCollidersCache[col] = true;
                 return true;
             }
@@ -236,7 +237,16 @@ namespace InventorySystem.OptimizedComponents
             var placementComponent = col.GetComponent<PlacementLayerComponent>();
             if (placementComponent != null)
             {
-                LogDebug($"Исключаем из коллизий объект с PlacementLayerComponent: {col.name}");
+                LogDebug($"Исключаем из коллизий объект с PlacementLayerComponent: {col.name} (слой: {placementComponent.PlacementLayer})");
+                ignoredCollidersCache[col] = true;
+                return true;
+            }
+            
+            // Проверяем специальные слои
+            string layerName = LayerMask.LayerToName(col.gameObject.layer);
+            if (layerName == "IgnoreCollision" || layerName == "Ignore Raycast")
+            {
+                LogDebug($"Исключаем объект на слое {layerName}: {col.name}");
                 ignoredCollidersCache[col] = true;
                 return true;
             }
@@ -246,18 +256,29 @@ namespace InventorySystem.OptimizedComponents
             {
                 if (col.CompareTag(ignoredTag))
                 {
+                    LogDebug($"Исключаем объект с тегом {ignoredTag}: {col.name}");
                     ignoredCollidersCache[col] = true;
                     return true;
                 }
             }
             
-            // Проверяем слои
+            // Проверяем слои из конфигурации
             if (((1 << col.gameObject.layer) & configuration.IgnoredLayers) != 0)
             {
+                LogDebug($"Исключаем объект на игнорируемом слое {layerName}: {col.name}");
                 ignoredCollidersCache[col] = true;
                 return true;
             }
             
+            // Если объект на слое Surface - исключаем из коллизий (но не из проверки поверхностей)
+            if (layerName == "Surface")
+            {
+                LogDebug($"Исключаем поверхность из коллизий: {col.name}");
+                ignoredCollidersCache[col] = true;
+                return true;
+            }
+            
+            LogDebug($"Коллизия с объектом: {col.name} (слой: {layerName})");
             ignoredCollidersCache[col] = false;
             return false;
         }
