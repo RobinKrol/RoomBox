@@ -70,7 +70,6 @@ namespace InventorySystem.OptimizedComponents
             if (inventorySlots.Count == 0)
             {
                 CreateDefaultSlots();
-                LogDebug($"Создано слотов: {inventorySlots.Count}");
             }
             
             // Создаем UI если его нет
@@ -129,6 +128,18 @@ namespace InventorySystem.OptimizedComponents
         
         public bool AddItem(IItem item, int amount = 1)
         {
+            // Гарантируем, что менеджер инициализирован и слоты созданы
+            EnsureInitialized();
+            if (inventorySlots == null || inventorySlots.Count == 0)
+            {
+                LogWarning("Слоты ещё не созданы. Создаём слоты по умолчанию перед добавлением предмета.");
+                CreateDefaultSlots();
+                if (slotUIs != null && slotUIs.Count == 0)
+                {
+                    CreateSlotUIs();
+                }
+            }
+
             if (item == null)
             {
                 LogWarning("Попытка добавить null предмет");
@@ -291,7 +302,7 @@ namespace InventorySystem.OptimizedComponents
         {
             for (int i = 0; i < inventorySlots.Count; i++)
             {
-                LogDebug($"Проверка слота {i}: IsEmpty = {inventorySlots[i].IsEmpty}, Item = {inventorySlots[i].Item?.ItemName ?? "null"}");
+                LogDebug($"Проверка слота {i}: IsEmpty = {inventorySlots[i].IsEmpty}");
                 if (inventorySlots[i].IsEmpty)
                     return i;
             }
@@ -363,6 +374,7 @@ namespace InventorySystem.OptimizedComponents
             {
                 inventoryPanel.SetActive(isInventoryOpen);
             }
+            UpdateInventoryUI();
             
             LogDebug($"Инвентарь {(isInventoryOpen ? "открыт" : "закрыт")}");
         }
@@ -399,6 +411,13 @@ namespace InventorySystem.OptimizedComponents
         {
             LogDebug($"Обновление UI: {slotUIs.Count} UI слотов, {inventorySlots.Count} слотов данных");
             
+            // Если UI ещё не создан, создадим его на лету, чтобы изменения были видны сразу
+            if ((slotUIs == null || slotUIs.Count == 0) && inventoryPanel != null)
+            {
+                LogDebug("UI слотов нет — создаём их перед обновлением UI");
+                CreateSlotUIs();
+            }
+
             for (int i = 0; i < slotUIs.Count && i < inventorySlots.Count; i++)
             {
                 var slot = inventorySlots[i];
@@ -465,7 +484,9 @@ namespace InventorySystem.OptimizedComponents
             // Создаем 8 оптимизированных слотов
             for (int i = 0; i < 8; i++)
             {
-                var slot = new OptimizedInventorySlot();
+                var slotGo = new GameObject($"InventorySlot_{i + 1}");
+                slotGo.transform.SetParent(transform, false);
+                var slot = slotGo.AddComponent<OptimizedInventorySlot>();
                 inventorySlots.Add(slot);
             }
             LogDebug($"Создано {inventorySlots.Count} слотов");
@@ -483,12 +504,26 @@ namespace InventorySystem.OptimizedComponents
                 return;
             }
             
-            // Создаем UI слоты
-            for (int i = 0; i < inventorySlots.Count; i++)
+            // 1) Пробуем использовать уже существующие слоты UI в панели
+            var existingSlotUIs = slotsParent.GetComponentsInChildren<InventorySlotUI>(true);
+            if (existingSlotUIs != null && existingSlotUIs.Length > 0)
+            {
+                LogDebug($"Найдено существующих UI слотов: {existingSlotUIs.Length}");
+                slotUIs.Clear();
+                slotUIs.AddRange(existingSlotUIs);
+            }
+            
+            // 2) Если слоты UI отсутствуют или их меньше, чем слотов данных — создаем недостающие
+            for (int i = slotUIs.Count; i < inventorySlots.Count; i++)
             {
                 var slotUI = UIFactory.CreateInventorySlotUI(slotsParent);
                 slotUIs.Add(slotUI);
-                slotUI.UpdateSlotUI(null); // <-- инициализация как пустого
+            }
+            
+            // 3) Инициализируем каждый UI слот как пустой до первой синхронизации данных
+            for (int i = 0; i < slotUIs.Count; i++)
+            {
+                slotUIs[i].UpdateSlotUI(null);
             }
             
             LogDebug($"Создано {slotUIs.Count} UI слотов");

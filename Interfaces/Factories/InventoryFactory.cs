@@ -12,19 +12,18 @@ namespace InventorySystem.Factories
         /// <summary>
         /// Создает новый слот инвентаря
         /// </summary>
-        public static InventorySlot CreateInventorySlot(Item item = null, int quantity = 0)
+        public static IInventorySlot CreateInventorySlot(IItem item = null, int quantity = 0)
         {
-            return new InventorySlot(item, quantity);
+            var go = new GameObject("InventorySlot");
+            var slot = go.AddComponent<OptimizedInventorySlot>();
+            if (item != null)
+            {
+                slot.AddItems(item, quantity);
+            }
+            return slot;
         }
-        
-        /// <summary>
-        /// Создает адаптер для слота инвентаря
-        /// </summary>
-        public static InventorySlotAdapter CreateInventorySlotAdapter(InventorySlot originalSlot)
-        {
-            return new InventorySlotAdapter(originalSlot);
-        }
-        
+
+
         /// <summary>
         /// Создает адаптер для предмета
         /// </summary>
@@ -36,9 +35,9 @@ namespace InventorySystem.Factories
         /// <summary>
         /// Создает список слотов инвентаря
         /// </summary>
-        public static List<InventorySlot> CreateInventorySlots(int count)
+        public static List<IInventorySlot> CreateInventorySlots(int count)
         {
-            var slots = new List<InventorySlot>();
+            var slots = new List<IInventorySlot>();
             for (int i = 0; i < count; i++)
             {
                 slots.Add(CreateInventorySlot());

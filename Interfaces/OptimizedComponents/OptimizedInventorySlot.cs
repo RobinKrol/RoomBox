@@ -18,10 +18,7 @@ namespace InventorySystem.OptimizedComponents
         public bool CanAddMore => !IsEmpty && quantity < MaxStackSize;
         public int MaxStackSize => itemWrapper != null ? itemWrapper.MaxStackSize : maxStackSize;
 
-        public OptimizedInventorySlot()
-        {
-            UnityEngine.Debug.Log("[OptimizedInventorySlot] Конструктор: itemWrapper=null, quantity=0");
-        }
+        // Не используем конструкторы у MonoBehaviour. Инициализация происходит в Awake/Start при необходимости
 
         public int AddItems(IItem item, int amount = 1)
         {
