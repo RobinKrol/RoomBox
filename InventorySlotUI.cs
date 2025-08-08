@@ -33,7 +33,17 @@ public class InventorySlotUI : MonoBehaviour, IInventorySlotUI
             itemIcon = GetComponent<Image>();
         
         if (dragHandler == null)
+        {
             dragHandler = GetComponent<InventorySlotDragHandler>();
+            if (dragHandler == null)
+            {
+                Debug.LogWarning($"[InventorySlotUI] InventorySlotDragHandler не найден на объекте {gameObject.name}");
+            }
+            else
+            {
+                Debug.Log($"[InventorySlotUI] Найден InventorySlotDragHandler на объекте {gameObject.name}");
+            }
+        }
         
         // Автоматически находим TextMeshProUGUI компонент в дочерних объектах
         if (quantityText == null)
@@ -135,6 +145,25 @@ public class InventorySlotUI : MonoBehaviour, IInventorySlotUI
                 itemIcon.enabled = true;
                 // Восстанавливаем непрозрачность для слота с предметом
                 itemIcon.color = Color.white;
+            }
+            
+            // Обновляем drag handler для IInventorySlot
+            if (dragHandler != null && slot.Item != null)
+            {
+                // Конвертируем IItem в Item для dragHandler
+                Item originalItem = slot.Item as Item ?? (slot.Item as ItemWrapper)?.GetOriginalItem();
+                if (originalItem != null)
+                {
+                    dragHandler.item = originalItem;
+                    dragHandler.dragPrefab = originalItem.prefab;
+                    Debug.Log($"[InventorySlotUI] Обновлен dragHandler для слота {gameObject.name}: item={originalItem.itemName}, prefab={originalItem.prefab}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[InventorySlotUI] Не удалось получить оригинальный Item для dragHandler в слоте {gameObject.name}");
+                    dragHandler.item = null;
+                    dragHandler.dragPrefab = null;
+                }
             }
             
             UpdateQuantityText(slot.Quantity);

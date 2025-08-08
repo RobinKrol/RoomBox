@@ -192,17 +192,26 @@ namespace InventorySystem.OptimizedComponents
             
             // Проверяем наложение с другими объектами
             tempColliders.Clear();
-            var colliders = Physics.OverlapBox(position, itemSize * 0.5f, rotation);
+            var colliders = Physics.OverlapBox(position, itemSize * 0.5f, rotation, configuration.CollisionCheckMask);
+            
+            LogDebug($"Проверка наложения: размер={itemSize}, найдено коллайдеров={colliders.Length}");
             
             foreach (var collider in colliders)
             {
                 if (!ShouldIgnoreCollider(collider))
                 {
                     tempColliders.Add(collider);
+                    LogDebug($"❌ Обнаружено наложение с {collider.name}");
+                }
+                else
+                {
+                    LogDebug($"✅ Игнорируем коллайдер при наложении: {collider.name}");
                 }
             }
             
-            return tempColliders.Count == 0;
+            bool isValid = tempColliders.Count == 0;
+            LogDebug($"Результат проверки наложения: {(isValid ? "✅ Наложений нет" : $"❌ Найдено {tempColliders.Count} наложений")}");
+            return isValid;
         }
         
         private bool ShouldIgnoreCollider(Collider col)
@@ -261,8 +270,23 @@ namespace InventorySystem.OptimizedComponents
         
         private Vector3 GetItemSize(IItem item, Quaternion rotation)
         {
-            // Упрощенная логика получения размера предмета
-            return Vector3.one * 0.5f; // По умолчанию
+            // Пытаемся получить размер из оригинального Item
+            if (item is ItemWrapper wrapper && wrapper.GetOriginalItem()?.prefab != null)
+            {
+                var prefab = wrapper.GetOriginalItem().prefab;
+                var renderer = prefab.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    var size = renderer.bounds.size;
+                    LogDebug($"Размер предмета {item.ItemName}: {size}");
+                    return size;
+                }
+            }
+            
+            // Fallback: используем размер по умолчанию
+            var defaultSize = Vector3.one * 0.5f;
+            LogDebug($"Используем размер по умолчанию для {item.ItemName}: {defaultSize}");
+            return defaultSize;
         }
         
         private Vector3[] GenerateTestPositions(Vector3 center, float radius, int count)

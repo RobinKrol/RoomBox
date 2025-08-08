@@ -407,7 +407,7 @@ namespace InventorySystem.OptimizedComponents
             LogDebug("Инвентарь закрыт");
         }
         
-        private void UpdateInventoryUI()
+                private void UpdateInventoryUI()
         {
             LogDebug($"Обновление UI: {slotUIs.Count} UI слотов, {inventorySlots.Count} слотов данных");
             
@@ -417,7 +417,7 @@ namespace InventorySystem.OptimizedComponents
                 LogDebug("UI слотов нет — создаём их перед обновлением UI");
                 CreateSlotUIs();
             }
-
+            
             for (int i = 0; i < slotUIs.Count && i < inventorySlots.Count; i++)
             {
                 var slot = inventorySlots[i];
@@ -429,6 +429,13 @@ namespace InventorySystem.OptimizedComponents
                 {
                     slotUI.UpdateSlotUI(slot);
                     LogDebug($"Слот {i + 1} содержит {slot.Quantity}x {slot.Item.ItemName}");
+                    
+                    // Дополнительная проверка dragHandler
+                    var dragHandler = slotUI.GetComponent<InventorySlotDragHandler>();
+                    if (dragHandler != null)
+                    {
+                        LogDebug($"Проверка dragHandler слота {i}: item={dragHandler.item?.itemName ?? "null"}, prefab={dragHandler.dragPrefab?.name ?? "null"}");
+                    }
                 }
                 else
                 {

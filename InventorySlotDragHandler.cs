@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 using LineworkLite.FreeOutline;
 using System.Collections.Generic;
 using InventorySystem.OptimizedComponents;
+using InventorySystem.Factories;
 
 public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
@@ -276,7 +277,10 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
                 Debug.Log($"[CheckPlacementValidity] Используем интерфейс валидации для {item.ItemName}");
             
             // Передаем превью объект в валидатор для исключения из проверок
-            _placementValidator.SetPreviewInstance(previewInstance);
+            if (previewInstance != null)
+            {
+                _placementValidator.SetPreviewInstance(previewInstance);
+            }
             
             return _placementValidator.CanPlaceItem(item?.ToIItem(), position, previewRotation);
         }
@@ -288,7 +292,10 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
                 Debug.Log($"[CheckPlacementValidity] Используем прямую ссылку валидации для {item.ItemName}");
             
             // Передаем превью объект в валидатор для исключения из проверок
-            placementValidator.SetPreviewInstance(previewInstance);
+            if (previewInstance != null)
+            {
+                placementValidator.SetPreviewInstance(previewInstance);
+            }
             
             return placementValidator.CanPlaceItem(item?.ToIItem(), position, previewRotation);
         }
@@ -1726,38 +1733,53 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
             }
             placedItemComponent.SetItemData(itemToPlace);
             
-            // Убираем предмет из инвентаря - ИСПРАВЛЕНО
+            // Убираем предмет из инвентаря - РАБОТАЕМ С НОВОЙ АРХИТЕКТУРОЙ
             bool itemRemoved = false;
-            if (inventoryManager != null)
+            
+            // 1. Пробуем использовать OptimizedInventoryManager
+            var optimizedManager = FindFirstObjectByType<OptimizedInventoryManager>();
+            if (optimizedManager != null)
             {
-                // Проверяем, есть ли предмет в инвентаре перед удалением
+                // Конвертируем Item в IItem
+                var itemWrapper = new ItemWrapper(itemToPlace);
+                if (optimizedManager.HasItem(itemWrapper, 1))
+                {
+                    optimizedManager.RemoveItem(itemWrapper, 1);
+                    itemRemoved = true;
+                    Debug.Log($"Предмет {itemToPlace.itemName} убран из OptimizedInventoryManager");
+                }
+                else
+                {
+                    Debug.LogWarning($"Предмет {itemToPlace.itemName} не найден в OptimizedInventoryManager!");
+                }
+            }
+            // 2. Fallback на старый InventoryManager
+            else if (inventoryManager != null)
+            {
                 if (inventoryManager.HasItem(itemToPlace, 1))
                 {
                     inventoryManager.RemoveItem(itemToPlace, 1);
                     itemRemoved = true;
-                    Debug.Log($"Предмет {itemToPlace.itemName} убран из инвентаря");
+                    Debug.Log($"Предмет {itemToPlace.itemName} убран из старого InventoryManager");
                 }
                 else
                 {
-                    Debug.LogWarning($"Предмет {itemToPlace.itemName} не найден в инвентаре для удаления!");
+                    Debug.LogWarning($"Предмет {itemToPlace.itemName} не найден в старом InventoryManager!");
+                }
+            }
+            // 3. Fallback на InventoryManager.Instance
+            else if (InventoryManager.Instance != null)
+            {
+                if (InventoryManager.Instance.HasItem(itemToPlace, 1))
+                {
+                    InventoryManager.Instance.RemoveItem(itemToPlace, 1);
+                    itemRemoved = true;
+                    Debug.Log($"Предмет {itemToPlace.itemName} убран из InventoryManager.Instance");
                 }
             }
             else
             {
-                Debug.LogError("InventoryManager не найден! Пытаемся найти через Instance...");
-                if (InventoryManager.Instance != null)
-                {
-                    if (InventoryManager.Instance.HasItem(itemToPlace, 1))
-                    {
-                        InventoryManager.Instance.RemoveItem(itemToPlace, 1);
-                        itemRemoved = true;
-                        Debug.Log($"Предмет {itemToPlace.itemName} убран из инвентаря через Instance");
-                    }
-                }
-                else
-                {
-                    Debug.LogError("InventoryManager.Instance также не найден!");
-                }
+                Debug.LogError("Не найден ни один InventoryManager!");
             }
 
             
