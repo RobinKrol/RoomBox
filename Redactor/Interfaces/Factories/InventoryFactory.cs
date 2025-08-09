@@ -114,7 +114,7 @@ namespace InventorySystem.Factories
         /// <summary>
         /// Создает систему валидации размещения
         /// </summary>
-        public static OptimizedItemPlacementValidator CreatePlacementValidator(InventoryManager inventoryManager = null)
+        public static OptimizedItemPlacementValidator CreatePlacementValidator(OptimizedInventoryManager inventoryManager = null)
         {
             var go = new GameObject("OptimizedItemPlacementValidator");
             var validator = go.AddComponent<OptimizedItemPlacementValidator>();

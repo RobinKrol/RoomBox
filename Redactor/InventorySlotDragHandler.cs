@@ -5,6 +5,8 @@ using LineworkLite.FreeOutline;
 using System.Collections.Generic;
 using InventorySystem.OptimizedComponents;
 using InventorySystem.Factories;
+using InventorySystem.Adapters;
+using InventorySystem.EventSystem;
 
 public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
@@ -22,7 +24,7 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
     // Интерфейсы для работы с системой
     private IInventoryManager _inventoryManager;
     private IItemPlacementValidator _placementValidator;
-    private IInventoryEventSystem _eventSystem;
+        private IInventoryEventSystem _eventSystem;
     
     // Индекс текущего слота
     private int _slotIndex = -1;
@@ -44,31 +46,20 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
     private bool wasValidLastFrame = true; // Для отслеживания изменения валидности
     private Camera mainCamera; // Кэшированная камера для оптимизации
 
+    // Цвета по умолчанию, если старый InventoryManager отсутствует
+    private static readonly Color DefaultValidColor = new Color(0f, 1f, 0f, 0.5f);
+    private static readonly Color DefaultInvalidColor = new Color(1f, 0f, 0f, 0.5f);
+    private static readonly Color DefaultOverlapWarningColor = new Color(1f, 0.64f, 0f, 0.5f); // оранжевый
+
     void Awake()
     {
-        // Получаем настройки из InventoryManager
-        if (inventoryManager == null)
-        {
-            inventoryManager = Object.FindFirstObjectByType<InventoryManager>();
-            if (inventoryManager == null)
-            {
-                Debug.LogError("[InventorySlotDragHandler] InventoryManager не найден в сцене!");
-            }
-            else
-            {
-                Debug.Log($"[InventorySlotDragHandler] InventoryManager найден: {inventoryManager.name}");
-            }
-        }
+        // Старый InventoryManager больше не обязателен. Если он не назначен в сцене — просто работаем с дефолтными настройками
+        // и новой системой валидации/событий. Ошибку не выводим.
         
-        // Устанавливаем слой обводки из настроек InventoryManager
-        if (inventoryManager != null)
-        {
-            outlineLayer = LayerMask.NameToLayer(inventoryManager.OutlineLayerName);
-        }
-        else
-        {
-            outlineLayer = LayerMask.NameToLayer("OutlinePreview");
-        }
+        // Устанавливаем слой обводки: берем из старого InventoryManager если он есть, иначе используем слой по умолчанию
+        outlineLayer = inventoryManager != null
+            ? LayerMask.NameToLayer(inventoryManager.OutlineLayerName)
+            : LayerMask.NameToLayer("OutlinePreview");
         
         mainCamera = Camera.main; // Кэшируем камеру
             
@@ -144,8 +135,8 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
             Debug.LogWarning("[InventorySlotDragHandler] OptimizedItemPlacementValidator не реализует IItemPlacementValidator");
         }
         
-        // Инициализируем IInventoryEventSystem
-        _eventSystem = InventoryEventSystem.GetInstance();
+        // Инициализируем IInventoryEventSystem через адаптер новой системы
+        _eventSystem = EventSystemAdapter.GetOrCreate();
         if (_eventSystem == null)
         {
             Debug.LogWarning("[InventorySlotDragHandler] InventoryEventSystem не найден");
@@ -193,16 +184,7 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
     
     void Update()
     {
-        // Проверяем и восстанавливаем ссылки, если они потерялись
-        if (inventoryManager == null)
-        {
-            inventoryManager = Object.FindFirstObjectByType<InventoryManager>();
-            if (inventoryManager == null && InventoryManager.Instance != null)
-            {
-                inventoryManager = InventoryManager.Instance;
-                Debug.Log("[Update] Восстановлена ссылка на InventoryManager через Instance");
-            }
-        }
+        // Не восстанавливаем старый InventoryManager — работаем без него
         
         if (placedItemsCounter == null)
         {
@@ -301,6 +283,7 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
         }
         
         // Fallback к старой логике если валидатор не найден
+        // Если старого менеджера нет, считаем проверку успешной (конфигурация теперь в валидаторе)
         if (inventoryManager == null) return true;
         
         if (!inventoryManager.EnableValidation) 
@@ -988,6 +971,36 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
         return withinBounds;
     }
 
+    /// <summary>
+    /// Ограничивает точку в пределах границ пола (RoomBoxFloor), учитывая размер объекта
+    /// </summary>
+    private Vector3 ClampToRoomBounds(Vector3 position)
+    {
+        GameObject floor = GameObject.FindGameObjectWithTag("RoomBoxFloor");
+        if (floor == null) return position;
+        Collider floorCollider = floor.GetComponent<Collider>();
+        if (floorCollider == null) return position;
+
+        Bounds floorBounds = floorCollider.bounds;
+
+        // Размер и половины для отступа
+        Vector3 size = GetObjectSize();
+        float halfX = size.x * 0.5f;
+        float halfZ = size.z * 0.5f;
+
+        // Клэмпим XZ с учётом размеров и отступа FloorBoundsMargin, если доступен
+        float margin = inventoryManager != null ? inventoryManager.FloorBoundsMargin : 0f;
+
+        float minX = floorBounds.min.x + margin + halfX;
+        float maxX = floorBounds.max.x - margin - halfX;
+        float minZ = floorBounds.min.z + margin + halfZ;
+        float maxZ = floorBounds.max.z - margin - halfZ;
+
+        position.x = Mathf.Clamp(position.x, minX, maxX);
+        position.z = Mathf.Clamp(position.z, minZ, maxZ);
+        return position;
+    }
+
     private bool CheckCornerCollisions(Vector3 position)
     {
         if (previewInstance == null || inventoryManager == null) return false;
@@ -1211,33 +1224,57 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
 
     private void UpdateVisualFeedback(bool isValid)
     {
-        if (previewRenderers == null || inventoryManager == null) return;
+        if (previewRenderers == null) return;
         
         Color targetColor;
         
         // Проверяем наложение объектов для специального цвета предупреждения
         bool hasOverlap = false;
-        if (inventoryManager.PreventObjectOverlap && previewInstance != null)
+        if (previewInstance != null && inventoryManager != null && inventoryManager.PreventObjectOverlap)
         {
             hasOverlap = CheckObjectOverlap(previewInstance.transform.position);
         }
         
-        // Используем систему слоев для визуальной обратной связи
-        if (inventoryManager.EnableLayerSystem && previewInstance != null)
+        // 1) Приоритет: берём цвет из нового валидатора, если он есть
+        if (previewInstance != null && _placementValidator != null && item != null)
+        {
+            var feedback = _placementValidator.GetVisualFeedback(item.ToIItem(), previewInstance.transform.position, previewInstance.transform.rotation);
+            isValid = feedback.IsValid;
+            // Красим материалы непосредственно
+            for (int i = 0; i < previewRenderers.Length; i++)
+            {
+                if (previewRenderers[i] == null) continue;
+                var materials = previewRenderers[i].materials;
+                for (int j = 0; j < materials.Length; j++)
+                {
+                    if (materials[j].HasProperty("_Color"))
+                    {
+                        materials[j].color = feedback.Color;
+                    }
+                }
+            }
+            return;
+        }
+
+        // 2) Иначе используем систему слоёв, если доступна в старом менеджере
+        if (previewInstance != null && inventoryManager != null && inventoryManager.EnableLayerSystem)
         {
             PlacementLayer itemLayer = GetPlacementLayer(previewInstance);
             UpdateLayerVisualFeedback(isValid, itemLayer);
+            return;
         }
         else
         {
             // Стандартная визуальная обратная связь с учетом наложения
             if (hasOverlap)
             {
-                targetColor = inventoryManager.OverlapWarningColor; // Оранжевый для предупреждения о наложении
+                targetColor = inventoryManager != null ? inventoryManager.OverlapWarningColor : DefaultOverlapWarningColor; // Оранжевый для предупреждения о наложении
             }
             else
             {
-                targetColor = isValid ? inventoryManager.ValidPlacementColor : inventoryManager.InvalidPlacementColor;
+                targetColor = isValid 
+                    ? (inventoryManager != null ? inventoryManager.ValidPlacementColor : DefaultValidColor)
+                    : (inventoryManager != null ? inventoryManager.InvalidPlacementColor : DefaultInvalidColor);
             }
         
             // Обновляем цвет основного объекта
@@ -1379,6 +1416,13 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
             Debug.LogWarning("[OnDrag] Перетаскивание не активно!");
             return;
         }
+
+            // Защита: в некоторых конфигурациях Input System Mouse.current может быть null
+            if (Mouse.current == null)
+            {
+                Debug.LogWarning("[OnDrag] Mouse.current is null — пропускаю обработку кадра");
+                return;
+            }
         
         if (previewInstance == null) 
         {
@@ -1419,12 +1463,12 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
             return;
         }
         
-        if (mainCamera == null)
+            if (mainCamera == null)
         {
             mainCamera = Camera.main;
             if (mainCamera == null)
             {
-                Debug.LogError("[OnDrag] mainCamera is null!");
+                    Debug.LogError("[OnDrag] mainCamera is null — пропускаю обработку кадра");
                 return;
             }
         }
@@ -1437,7 +1481,7 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
         {
             // Используем Raycast для более точного позиционирования
             Ray ray = mainCamera.ScreenPointToRay(mouseScreenPos);
-            if (Physics.Raycast(ray, out RaycastHit hit) && hit.collider.CompareTag("RoomBoxFloor"))
+            if (Physics.Raycast(ray, out RaycastHit hit) && hit.collider != null && hit.collider.CompareTag("RoomBoxFloor"))
             {
                 targetPosition = hit.point;
             }
@@ -1474,24 +1518,24 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
             else
             {
                 // Fallback если луч не пересекает плоскость
-                float distanceToFloor = Mathf.Abs(mainCamera.transform.position.y) + (inventoryManager != null ? inventoryManager.CameraDistanceOffset : 0f);
+                    float distanceToFloor = Mathf.Abs(mainCamera.transform.position.y) + (inventoryManager != null ? inventoryManager.CameraDistanceOffset : 0f);
                 targetPosition = mainCamera.ScreenToWorldPoint(new Vector3(
                     mouseScreenPos.x, mouseScreenPos.y, distanceToFloor
                 ));
-                targetPosition.y = inventoryManager != null ? inventoryManager.FloorHeight : 0f;
+                    targetPosition.y = inventoryManager != null ? inventoryManager.FloorHeight : 0f;
             }
         }
 
         // --- ДОБАВЛЕНО: поддержка прилипания к поверхности для Item ---
-        if (inventoryManager != null && inventoryManager.EnableLayerSystem && previewInstance != null)
+        if (previewInstance != null && (inventoryManager == null || (inventoryManager != null && inventoryManager.EnableLayerSystem)))
         {
             PlacementLayer itemLayer = GetPlacementLayer(previewInstance);
-            if (inventoryManager.DebugSurfaceSystem)
+            if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                 Debug.Log($"[SurfaceDebug] enableLayerSystem={inventoryManager.EnableLayerSystem}, previewInstance={previewInstance.name}, itemLayer={itemLayer}");
             
             if (itemLayer == PlacementLayer.Item)
             {
-                if (inventoryManager.DebugSurfaceSystem)
+                if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                     Debug.Log($"[SurfaceDebug] Предмет имеет слой Item, ищем поверхность...");
                 
                 var surface = FindSuitableSurface(targetPosition, itemLayer);
@@ -1499,18 +1543,18 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
                 {
                     Vector3 surfacePos = surface.GetSurfacePosition();
                     targetPosition.y = surfacePos.y;
-                    if (inventoryManager.DebugSurfaceSystem)
+                    if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                         Debug.Log($"[SurfaceDebug] Найдена поверхность {surface.gameObject.name}, установлена Y={surfacePos.y}");
                 }
                 else
                 {
-                    if (inventoryManager.DebugSurfaceSystem)
+                    if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                         Debug.Log($"[SurfaceDebug] Поверхность не найдена, оставляем Y={targetPosition.y}");
                 }
             }
             else
             {
-                if (inventoryManager.DebugSurfaceSystem)
+                if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                     Debug.Log($"[SurfaceDebug] Предмет имеет слой {itemLayer}, поиск поверхности пропущен");
             }
         }
@@ -1540,15 +1584,15 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
         }
 
         // --- ДОБАВЛЕНО: поддержка прилипания к поверхности для Item после SnapToGrid ---
-        if (inventoryManager != null && inventoryManager.EnableLayerSystem && previewInstance != null)
+        if (previewInstance != null && (inventoryManager == null || (inventoryManager != null && inventoryManager.EnableLayerSystem)))
         {
             PlacementLayer itemLayer = GetPlacementLayer(previewInstance);
-            if (inventoryManager.DebugSurfaceSystem)
+            if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                 Debug.Log($"[SurfaceDebug2] enableLayerSystem={inventoryManager.EnableLayerSystem}, previewInstance={previewInstance.name}, itemLayer={itemLayer}");
             
             if (itemLayer == PlacementLayer.Item)
             {
-                if (inventoryManager.DebugSurfaceSystem)
+                if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                     Debug.Log($"[SurfaceDebug2] Предмет имеет слой Item, ищем поверхность...");
                 
                 var surface = FindSuitableSurface(targetPosition, itemLayer);
@@ -1556,18 +1600,18 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
                 {
                     Vector3 surfacePos = surface.GetSurfacePosition();
                     targetPosition.y = surfacePos.y;
-                    if (inventoryManager.DebugSurfaceSystem)
+                    if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                         Debug.Log($"[SurfaceDebug2] Найдена поверхность {surface.gameObject.name}, установлена Y={surfacePos.y}");
                 }
                 else
                 {
-                    if (inventoryManager.DebugSurfaceSystem)
+                    if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                         Debug.Log($"[SurfaceDebug2] Поверхность не найдена, оставляем Y={targetPosition.y}");
                 }
             }
             else
             {
-                if (inventoryManager.DebugSurfaceSystem)
+                if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
                     Debug.Log($"[SurfaceDebug2] Предмет имеет слой {itemLayer}, поиск поверхности пропущен");
             }
         }
@@ -1578,8 +1622,11 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
         }
         // --- КОНЕЦ ДОБАВЛЕНИЯ ---
         
-        // Проверка валидности позиции
-        bool isValid = CheckPlacementValidityWithGrid(targetPosition);
+        // Жёсткое ограничение по границам комнаты (RoomBoxFloor)
+        targetPosition = ClampToRoomBounds(targetPosition);
+
+        // Проверка валидности позиции (защита от null превью и отсутствия конфига)
+        bool isValid = previewInstance != null && CheckPlacementValidityWithGrid(targetPosition);
         canPlace = isValid;
         
         if (inventoryManager != null && inventoryManager.DebugSurfaceSystem)
@@ -1625,6 +1672,18 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
 
     private bool CheckPlacementValidityWithGrid(Vector3 position)
     {
+        // 1) Новая архитектура: всегда используем OptimizedItemPlacementValidator, если он есть
+        if (_placementValidator != null && item != null)
+        {
+            if (previewInstance != null)
+            {
+                _placementValidator.SetPreviewInstance(previewInstance);
+            }
+            return _placementValidator.CanPlaceItem(item.ToIItem(), position, previewInstance != null ? previewInstance.transform.rotation : Quaternion.identity);
+        }
+        
+        // 2) Legacy-путь (оставлен для обратной совместимости): если валидатор отсутствует,
+        // а старого InventoryManager нет — считаем валидным, чтобы не блокировать UX
         if (inventoryManager == null) return true;
         
         if (inventoryManager.DebugCollisions || inventoryManager.DebugSurfaceSystem)
@@ -1673,6 +1732,16 @@ public class InventorySlotDragHandler : MonoBehaviour, IBeginDragHandler, IDragH
         // Проверка коллизий (если включена валидация)
         if (inventoryManager.EnableValidation && !inventoryManager.DisableCollisionCheck)
         {
+            // Даже здесь отдаём приоритет новому валидатору, если он появился к этому моменту
+            if (_placementValidator != null && item != null)
+            {
+                if (previewInstance != null)
+                {
+                    _placementValidator.SetPreviewInstance(previewInstance);
+                }
+                return _placementValidator.CanPlaceItem(item.ToIItem(), position, previewInstance != null ? previewInstance.transform.rotation : Quaternion.identity);
+            }
+            
             bool collisionValid = CheckPlacementValidity(position);
             if (inventoryManager.DebugCollisions || inventoryManager.DebugSurfaceSystem)
             {

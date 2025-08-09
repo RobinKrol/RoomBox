@@ -64,13 +64,48 @@ namespace InventorySystem.OptimizedComponents
         private bool CheckFloorBounds(IItem item, Vector3 position, Quaternion rotation)
         {
             if (!configuration.CheckFloorBounds) return true;
-            
-            var itemSize = GetItemSize(item, rotation);
-            var bounds = new Bounds(position, itemSize);
-            
-            // Проверяем, что объект находится в пределах границ пола
-            // Здесь можно добавить логику проверки границ пола
-            return true; // Упрощенная проверка
+
+            // Находим пол с тегом RoomBoxFloor
+            GameObject floor = GameObject.FindGameObjectWithTag("RoomBoxFloor");
+            if (floor == null) return true;
+            Collider floorCollider = floor.GetComponent<Collider>();
+            if (floorCollider == null) return true;
+
+            Bounds floorBounds = floorCollider.bounds;
+
+            // Размер предмета с учётом превью и поворота
+            Vector3 size = GetItemSize(item, rotation);
+            float halfX = size.x * 0.5f;
+            float halfZ = size.z * 0.5f;
+
+            // Отступ от стен/границ
+            float margin = configuration.FloorBoundsMargin;
+
+            // Проверяем, что все углы остаются в пределах пола с отступом
+            Vector3[] corners = new Vector3[]
+            {
+                position + rotation * new Vector3( halfX, 0,  halfZ),
+                position + rotation * new Vector3(-halfX, 0,  halfZ),
+                position + rotation * new Vector3( halfX, 0, -halfZ),
+                position + rotation * new Vector3(-halfX, 0, -halfZ)
+            };
+
+            float minX = floorBounds.min.x + margin;
+            float maxX = floorBounds.max.x - margin;
+            float minZ = floorBounds.min.z + margin;
+            float maxZ = floorBounds.max.z - margin;
+
+            for (int i = 0; i < corners.Length; i++)
+            {
+                Vector3 c = corners[i];
+                if (c.x < minX || c.x > maxX || c.z < minZ || c.z > maxZ)
+                {
+                    LogDebug($"❌ Граница пола не пройдена (угол {i} вне границ)");
+                    return false;
+                }
+            }
+
+            return true;
         }
         
         private bool CheckCollisions(IItem item, Vector3 position, Quaternion rotation)
@@ -101,7 +136,7 @@ namespace InventorySystem.OptimizedComponents
         {
             // Проверяем, есть ли подходящая поверхность под предметом
             Vector3 checkPosition = position + Vector3.down * 0.1f;
-            Collider[] surfaceColliders = Physics.OverlapSphere(checkPosition, 0.1f, configuration.SurfaceCheckMask);
+            Collider[] surfaceColliders = Physics.OverlapSphere(checkPosition, 0.15f, configuration.SurfaceCheckMask);
             
             LogDebug($"Найдено {surfaceColliders.Length} поверхностей для проверки");
             LogDebug($"Позиция проверки: {checkPosition}");
@@ -112,6 +147,7 @@ namespace InventorySystem.OptimizedComponents
             {
                 LogDebug("Система слоев включена, проверяем PlacementLayerComponent");
                 
+                bool foundValidSurface = false;
                 foreach (Collider col in surfaceColliders)
                 {
                     LogDebug($"Проверяем коллайдер: {col.name} (слой: {col.gameObject.layer})");
@@ -146,7 +182,8 @@ namespace InventorySystem.OptimizedComponents
                             if (canPlaceOnSurface && onSurface)
                             {
                                 LogDebug($"✅ Поверхность валидна: {col.name}");
-                                return true;
+                                foundValidSurface = true;
+                                break;
                             }
                             else
                             {
@@ -165,14 +202,11 @@ namespace InventorySystem.OptimizedComponents
                         LogDebug($"Объект {col.name} не имеет PlacementLayerComponent");
                     }
                 }
-                
-                // Если не нашли PlacementLayerComponent, но есть коллайдеры - разрешаем размещение
-                if (surfaceColliders.Length > 0)
+                // Если система слоев включена, разрешаем размещение ТОЛЬКО при найденной валидной поверхности
+                if (foundValidSurface)
                 {
-                    LogDebug("Не найдено PlacementLayerComponent, но есть коллайдеры - разрешаем размещение");
                     return true;
                 }
-                
                 LogDebug("❌ Не найдено валидных поверхностей");
                 return false;
             }
@@ -303,6 +337,21 @@ namespace InventorySystem.OptimizedComponents
         
         private Vector3 GetItemSize(IItem item, Quaternion rotation)
         {
+            // Приоритет: если есть превью объект, измеряем его фактический размер
+            if (previewInstance != null)
+            {
+                var col = previewInstance.GetComponent<Collider>();
+                if (col != null)
+                {
+                    return col.bounds.size;
+                }
+                var rend = previewInstance.GetComponent<Renderer>();
+                if (rend != null)
+                {
+                    return rend.bounds.size;
+                }
+            }
+
             // Пытаемся получить размер из оригинального Item
             if (item is ItemWrapper wrapper && wrapper.GetOriginalItem()?.prefab != null)
             {

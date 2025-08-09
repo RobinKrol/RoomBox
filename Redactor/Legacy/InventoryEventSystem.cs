@@ -3,6 +3,7 @@ using UnityEngine;
 /// <summary>
 /// Централизованная система событий для инвентаря
 /// </summary>
+// LEGACY: оставлено для обратной совместимости. Новая система в InventorySystem.EventSystem.InventoryEventSystem
 public class InventoryEventSystem : MonoBehaviour, IInventoryEventSystem
 {
     public static InventoryEventSystem Instance { get; private set; }

@@ -118,11 +118,13 @@ public class PlacedItem : MonoBehaviour
             PlacedItemsCounter.GetInstance().RemovePlacedItem(itemData);
         }
         
-        // Возвращаем предмет в инвентарь (опционально)
-        if (InventoryManager.Instance != null && itemData != null)
+        // Возвращаем предмет в новый инвентарь (если есть)
+        var optimizedManager = FindFirstObjectByType<InventorySystem.OptimizedComponents.OptimizedInventoryManager>();
+        if (optimizedManager != null && itemData != null)
         {
-            InventoryManager.Instance.AddItem(itemData, 1);
-            Debug.Log($"Предмет {itemData.itemName} возвращен в инвентарь");
+            var wrapper = new ItemWrapper(itemData);
+            optimizedManager.AddItem(wrapper, 1);
+            Debug.Log($"Предмет {itemData.itemName} возвращен в OptimizedInventoryManager");
         }
         
         // Уничтожаем объект

@@ -7,7 +7,7 @@ using UnityEngine.InputSystem;
 public class StackingTest : MonoBehaviour
 {
     [Header("Тестирование")]
-    [SerializeField] private InventoryManager inventoryManager;
+    [SerializeField] private InventorySystem.OptimizedComponents.OptimizedInventoryManager inventoryManager;
     [SerializeField] private ItemDatabase itemDatabase;
     [SerializeField] private Key testKey = Key.T;
     [SerializeField] private Key clearKey = Key.C;
@@ -45,7 +45,7 @@ public class StackingTest : MonoBehaviour
         int amount = Random.Range(1, 5); // Случайное количество 1-4
         
         Debug.Log($"Тест: Добавляем {randomItem.itemName} x{amount}");
-        inventoryManager.AddItem(randomItem, amount);
+        inventoryManager.AddItem(new ItemWrapper(randomItem), amount);
     }
     
     /// <summary>
@@ -75,6 +75,6 @@ public class StackingTest : MonoBehaviour
         }
         
         Debug.Log($"Тест: Добавляем {item.itemName} x{amount}");
-        inventoryManager.AddItem(item, amount);
+        inventoryManager.AddItem(new ItemWrapper(item), amount);
     }
 } 

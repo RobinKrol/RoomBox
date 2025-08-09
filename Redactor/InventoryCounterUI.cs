@@ -15,14 +15,14 @@ public class InventoryCounterUI : MonoBehaviour
     [SerializeField] private float pulseSpeed = 2f;
     [SerializeField] private float pulseScale = 1.1f;
     
-    private InventoryManager inventoryManager;
+    private InventorySystem.OptimizedComponents.OptimizedInventoryManager inventoryManager;
     private Vector3 originalScale;
     private bool isPulsing = false;
     
     void Start()
     {
-                // Находим InventoryManager
-        inventoryManager = Object.FindFirstObjectByType<InventoryManager>();
+        // Находим OptimizedInventoryManager
+        inventoryManager = Object.FindFirstObjectByType<InventorySystem.OptimizedComponents.OptimizedInventoryManager>();
         
         // Автоматически находим компоненты, если они не назначены
         if (counterText == null)
@@ -54,7 +54,7 @@ public class InventoryCounterUI : MonoBehaviour
         
         int totalItems = 0;
         
-        // Получаем данные из InventoryManager
+        // Получаем данные из OptimizedInventoryManager
         if (inventoryManager != null)
         {
             // Используем новый метод для получения общего количества предметов

@@ -12,7 +12,7 @@ namespace InventorySystem.OptimizedComponents
     public partial class OptimizedItemPlacementValidator : BaseInventoryComponent<PlacementValidationConfig>, IItemPlacementValidator
     {
         [Header("Ссылки")]
-        [SerializeField] private InventoryManager inventoryManager;
+        [SerializeField] private OptimizedInventoryManager inventoryManager;
         
         // Кэшированные компоненты для оптимизации
         private readonly Dictionary<Collider, bool> ignoredCollidersCache = new Dictionary<Collider, bool>();
@@ -25,7 +25,7 @@ namespace InventorySystem.OptimizedComponents
             // Автоматически находим InventoryManager если не назначен
             if (inventoryManager == null)
             {
-                inventoryManager = FindRequiredComponent<InventoryManager>();
+                inventoryManager = FindRequiredComponent<OptimizedInventoryManager>();
             }
             
             // Применяем конфигурацию
